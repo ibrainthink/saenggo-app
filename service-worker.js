@@ -1,4 +1,4 @@
-const CACHE='saenggo-progress-v2-5-0';
+const CACHE='saenggo-progress-v2-6-0';
 const ASSETS=['./','./index.html','./manifest.webmanifest','./icon-192.png','./icon-512.png','./logo.png'];
 self.addEventListener('install',event=>{
   self.skipWaiting();
