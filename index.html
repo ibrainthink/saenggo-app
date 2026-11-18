@@ -1853,6 +1853,89 @@ function cloudView(){
   <div class="card">${body}${cloudStatusMsg?`<div class="small" style="margin-top:10px">${esc(cloudStatusMsg)}</div>`:""}</div>`;
 }
 /* ===== 클라우드 저장 끝 ===== */
+/* ===== 학생 초성 검색 + 완료 교재 검색 추가 ===== */
+const SEARCH_INITIALS = 'ㄱㄲㄴㄷㄸㄹㅁㅂㅃㅅㅆㅇㅈㅉㅊㅋㅌㅍㅎ';
+function searchInitials(value) {
+  return String(value || '').split('').map(ch => {
+    const code = ch.charCodeAt(0) - 0xAC00;
+    return code >= 0 && code <= 11171 ? SEARCH_INITIALS[Math.floor(code / 588)] : ch;
+  }).join('');
+}
+function studentNameMatches(name, query) {
+  const n = String(name || '').toLowerCase().replace(/\s+/g, '');
+  const q = String(query || '').toLowerCase().replace(/\s+/g, '');
+  return !q || n.includes(q) || searchInitials(n).includes(q);
+}
+// 기존 학생 목록 화면을 유지하면서 초성 검색 결과도 포함
+const originalListView = listView;
+listView = function () {
+  const html = originalListView();
+  const q = state.query.trim();
+  if (!q) return html;
+  const matching = state.students.filter(s => studentNameMatches(s.name, q))
+    .sort((a,b) => a.name.localeCompare(b.name, 'ko'));
+  const marker = '<div id="studentForm"></div>';
+  const start = html.indexOf(marker);
+  if (start < 0) return html;
+  const head = html.slice(0, start + marker.length);
+  return head + `<div id="studentSearchCount" class="small" style="margin:2px 2px 12px;font-weight:700">학생 목록 · 총 ${state.students.length}명 (검색결과 ${matching.length}명)</div>`
+    + (matching.length ? matching.map(studentCard).join('') : '<div id="studentSearchEmpty" class="empty">검색 결과가 없습니다.</div>');
+};
+// 입력할 때 즉시 검색 (학생 카드 목록과 결과 수 모두 갱신)
+filterStudents = function (value) {
+  state.query = value || '';
+  const input = document.getElementById('search');
+  const pos = input ? input.selectionStart : null;
+  const active = document.activeElement === input;
+  const host = document.getElementById('app');
+  if (!host) return;
+  // 전체 화면을 다시 그리지 않고 학생 목록 부분만 바꾸어 입력 포커스 유지
+  const toolbar = input?.closest('.toolbar');
+  const form = document.getElementById('studentForm');
+  if (!toolbar || !form) return;
+  const cards = state.students.filter(s => studentNameMatches(s.name, state.query))
+    .sort((a,b) => a.name.localeCompare(b.name, 'ko'));
+  let count = document.getElementById('studentSearchCount');
+  if (!count) {
+    count = form.nextElementSibling;
+    if (count) count.id = 'studentSearchCount';
+  }
+  if (count) count.textContent = `학생 목록 · 총 ${state.students.length}명${state.query.trim() ? ` (검색결과 ${cards.length}명)` : ''}`;
+  let next = count?.nextElementSibling;
+  while (next) {
+    const remove = next;
+    next = next.nextElementSibling;
+    remove.remove();
+  }
+  form.insertAdjacentHTML('afterend', '');
+  if (count) count.insertAdjacentHTML('afterend', cards.length ? cards.map(studentCard).join('') : `<div class="empty">${state.students.length ? '검색 결과가 없습니다.' : '등록된 학생이 없습니다.'}</div>`);
+  if (active && input && pos !== null) { input.focus(); input.setSelectionRange(pos, pos); }
+};
+// 완료 교재 화면에만 교재명 검색창 추가
+const originalDetailView = detailView;
+detailView = function (student) {
+  let html = originalDetailView(student);
+  if (state.detailTab !== 'alldone') return html;
+  const done = state.books.filter(b => b.studentId === student.id && b.status === 'done');
+  const headerEnd = html.indexOf('</div>', html.indexOf('✅ 완료된 교재 전체'));
+  if (headerEnd < 0) return html;
+  const afterHeader = headerEnd + '</div>'.length;
+  const searchBar = `<div style="margin:10px 0 14px"><input id="doneBookSearch" class="input search" placeholder="완료 교재명 검색 (예: 멘사)" oninput="filterCompletedBooks(this.value)" autocomplete="off"><div id="doneBookSearchCount" class="small" style="margin-top:5px">전체 ${done.length}권</div></div>`;
+  const cards = done.map(b => `<div data-completed-book="${esc(String(b.name).toLowerCase())}">${bookCard(b)}</div>`).join('');
+  return html.slice(0, afterHeader) + searchBar + (done.length ? cards : '<div class="empty">완료된 교재가 없습니다.</div>');
+};
+function filterCompletedBooks(value) {
+  const q = String(value || '').trim().toLowerCase();
+  let count = 0;
+  document.querySelectorAll('[data-completed-book]').forEach(el => {
+    const match = !q || (el.dataset.completedBook || '').startsWith(q);
+    el.style.display = match ? '' : 'none';
+    if (match) count++;
+  });
+  const label = document.getElementById('doneBookSearchCount');
+  if (label) label.textContent = q ? `검색결과 ${count}권` : `전체 ${count}권`;
+}
+/* ===== 검색 기능 추가 끝 ===== */
 
 load();render();
 </script>
